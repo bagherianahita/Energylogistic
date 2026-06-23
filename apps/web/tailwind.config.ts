@@ -8,11 +8,17 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        optimal: "#22c55e",
-        restricted: "#f97316",
+        optimal: "#10b981",
+        restricted: "#f59e0b",
         disrupted: "#ef4444",
-        panel: "#1a2332",
-        surface: "#0f1419",
+        accent: "#06b6d4",
+        panel: "#111827",
+        surface: "#070b12",
+        "surface-elevated": "#0d1219",
+      },
+      boxShadow: {
+        panel: "0 0 0 1px rgba(51, 65, 85, 0.5), 0 4px 24px rgba(0, 0, 0, 0.4)",
+        glow: "0 0 20px rgba(6, 182, 212, 0.15)",
       },
     },
   },

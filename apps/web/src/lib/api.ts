@@ -54,8 +54,15 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+export type Topology = {
+  nodes: { id: string; code: string; name: string; type: string }[];
+  edges: { id: string; code: string; source: string; target: string; status: string; maxDailyCapacityBbls: number }[];
+  adjacency: { primary: string; alternate: string; additionalDelayDays: number; priority: number }[];
+};
+
 export const api = {
   getDashboard: () => apiFetch<DashboardSummary>("/api/dashboard/summary"),
+  getTopology: () => apiFetch<Topology>("/api/pipelines/topology"),
   getNotifications: () => apiFetch<Notification[]>("/api/dashboard/notifications"),
   scheduleBlend: (body: {
     facilityCode: string;

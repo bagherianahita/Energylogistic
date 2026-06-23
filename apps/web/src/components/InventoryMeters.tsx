@@ -1,36 +1,36 @@
 "use client";
 
 import { InventoryMeter, formatBbls } from "@/lib/api";
-import { ProgressBar, StatusBadge } from "./ui";
+import { Panel, ProgressBar, StatusBadge } from "./ui";
 
 export function InventoryMeters({ meters }: { meters: InventoryMeter[] }) {
   return (
-    <section className="space-y-3">
-      <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-400">
-        Facility Inventory
-      </h2>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {meters.map((m) => (
-          <article
-            key={m.code}
-            className="rounded-lg border border-slate-700/80 bg-panel p-4 space-y-3"
-          >
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {meters.map((m) => (
+        <Panel key={m.code} noPadding className="overflow-hidden">
+          <div className="p-4 space-y-3">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <h3 className="font-medium">{m.name}</h3>
-                <p className="text-xs text-slate-500">{m.code}</p>
+                <h3 className="text-sm font-semibold text-slate-100">{m.name}</h3>
+                <p className="text-[10px] font-mono text-slate-500 mt-0.5">{m.code}</p>
               </div>
               <StatusBadge status={m.status} />
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <p className="text-xs text-slate-500">Bitumen</p>
-                <p className="font-mono tabular-nums">{formatBbls(m.bitumenBbls)}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg bg-surface/60 border border-slate-800/60 p-2.5">
+                <p className="text-[10px] uppercase tracking-wider text-amber-500/80">Bitumen</p>
+                <p className="font-mono text-sm font-medium tabular-nums mt-0.5">
+                  {(m.bitumenBbls / 1000).toFixed(0)}k
+                </p>
+                <p className="text-[9px] text-slate-600">bbl</p>
               </div>
-              <div>
-                <p className="text-xs text-slate-500">Diluent</p>
-                <p className="font-mono tabular-nums">{formatBbls(m.diluentBbls)}</p>
+              <div className="rounded-lg bg-surface/60 border border-slate-800/60 p-2.5">
+                <p className="text-[10px] uppercase tracking-wider text-cyan-500/80">Diluent</p>
+                <p className="font-mono text-sm font-medium tabular-nums mt-0.5">
+                  {(m.diluentBbls / 1000).toFixed(0)}k
+                </p>
+                <p className="text-[9px] text-slate-600">bbl</p>
               </div>
             </div>
 
@@ -39,12 +39,12 @@ export function InventoryMeters({ meters }: { meters: InventoryMeter[] }) {
               max={m.totalStorageCapacityBbls}
               status={m.status as "optimal" | "restricted" | "disrupted"}
             />
-            <p className="text-xs text-slate-500">
-              Capacity: {formatBbls(m.totalStorageCapacityBbls)}
+            <p className="text-[10px] text-slate-500 font-mono">
+              Cap {formatBbls(m.totalStorageCapacityBbls)}
             </p>
-          </article>
-        ))}
-      </div>
-    </section>
+          </div>
+        </Panel>
+      ))}
+    </div>
   );
 }
