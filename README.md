@@ -59,10 +59,11 @@ cp .env.example .env
 ```bash
 npm run docker:up
 ```
+PostgreSQL runs on **port 5433** (avoids conflict with local Postgres on 5432).
 
 ### 5. Run migrations & seed
 ```bash
-npm run db:migrate
+npm run db:migrate:deploy
 npm run db:seed
 ```
 
@@ -70,6 +71,8 @@ npm run db:seed
 ```bash
 npm run dev
 ```
+
+This starts both the API (port 4000) and web UI (port 3000).
 
 - **Web UI:** http://localhost:3000
 - **API:** http://localhost:4000
