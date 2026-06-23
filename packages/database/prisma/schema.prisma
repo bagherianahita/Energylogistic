@@ -1,0 +1,358 @@
+// energy-Logix — PostgreSQL Schema
+// Strict transactional integrity for volumetric mass balance
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Seed command: npm run seed --workspace=@energy-logix/database
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum FacilityType {
+  PRODUCTION_ASSET
+  MIDSTREAM_HUB
+  UPGRADER
+  REFINERY
+  TERMINAL
+}
+
+enum PipelineStatus {
+  ACTIVE
+  RESTRICTED
+  SHUTDOWN
+}
+
+enum BlendBatchStatus {
+  DRAFT
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  INVENTORY_WARNING
+}
+
+enum ShipmentStatus {
+  SCHEDULED
+  IN_TRANSIT
+  REROUTED
+  DIVERTED_TO_STORAGE
+  DELIVERED
+  CANCELLED
+  DELAYED
+}
+
+enum IncidentStatus {
+  OPEN
+  MITIGATING
+  RESOLVED
+}
+
+enum RerouteOptionType {
+  REROUTE
+  STORAGE_DIVERT
+}
+
+enum NotificationSeverity {
+  INFO
+  WARNING
+  HIGH_PRIORITY
+  CRITICAL
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+}
+
+// ─── Facilities & Inventory ──────────────────────────────────────────────────
+
+/// Upstream production assets, midstream hubs, upgraders, and downstream destinations.
+model Facility {
+  id                    String       @id @default(cuid())
+  code                  String       @unique // e.g. FOSTER_CREEK
+  name                  String
+  facilityType          FacilityType @map("facility_type")
+  region                String       @default("Lloydminster Thermal")
+
+  /// Current bitumen inventory (bbl) — CHECK >= 0 enforced at DB level
+  bitumenBbls           Decimal      @default(0) @map("bitumen_bbls") @db.Decimal(18, 2)
+  /// Current diluent inventory (bbl) — CHECK >= 0 enforced at DB level
+  diluentBbls           Decimal      @default(0) @map("diluent_bbls") @db.Decimal(18, 2)
+  /// Total combined storage ceiling (bbl)
+  totalStorageCapacityBbls Decimal   @map("total_storage_capacity_bbls") @db.Decimal(18, 2)
+
+  /// Nominal daily bitumen production rate (bbl/day) for production assets
+  nominalProductionBblsPerDay Decimal? @map("nominal_production_bbls_per_day") @db.Decimal(18, 2)
+
+  isActive              Boolean      @default(true) @map("is_active")
+  createdAt             DateTime     @default(now()) @map("created_at")
+  updatedAt             DateTime     @updatedAt @map("updated_at")
+
+  storageTanks          StorageTank[]
+  blendBatches          BlendBatch[]
+  shipmentsOrigin       Shipment[]   @relation("ShipmentOrigin")
+  shipmentsDestination  Shipment[]   @relation("ShipmentDestination")
+  pipelinesSource       PipelineSegment[] @relation("PipelineSource")
+  pipelinesDestination  PipelineSegment[] @relation("PipelineDestination")
+  rerouteStorageOptions RerouteOption[] @relation("RerouteStorageFacility")
+
+  @@map("facilities")
+}
+
+/// Local terminal storage tanks used for disruption diversion.
+model StorageTank {
+  id                String   @id @default(cuid())
+  facilityId        String   @map("facility_id")
+  name              String
+  productType       String   @map("product_type") // BITUMEN | DILUENT | BLEND
+  maxCapacityBbls   Decimal  @map("max_capacity_bbls") @db.Decimal(18, 2)
+  currentVolumeBbls Decimal  @default(0) @map("current_volume_bbls") @db.Decimal(18, 2)
+  isOperational     Boolean  @default(true) @map("is_operational")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  facility          Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@unique([facilityId, name])
+  @@map("storage_tanks")
+}
+
+// ─── Pipeline Topology Graph ─────────────────────────────────────────────────
+
+/// Directed edge in the asset topology graph.
+model PipelineSegment {
+  id                    String         @id @default(cuid())
+  code                  String         @unique
+  name                  String
+  sourceFacilityId      String         @map("source_facility_id")
+  destinationFacilityId String         @map("destination_facility_id")
+
+  status                PipelineStatus @default(ACTIVE)
+  maxDailyCapacityBbls  Decimal        @map("max_daily_capacity_bbls") @db.Decimal(18, 2)
+  /// Current flow rate (bbl/day) — must not exceed maxDailyCapacityBbls
+  currentFlowBblsPerDay Decimal        @default(0) @map("current_flow_bbls_per_day") @db.Decimal(18, 2)
+
+  /// Length in km (informational)
+  lengthKm              Decimal?       @map("length_km") @db.Decimal(10, 2)
+  /// Typical transit time in hours
+  transitHours          Int?           @map("transit_hours")
+
+  isOperational         Boolean        @default(true) @map("is_operational")
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+
+  sourceFacility        Facility       @relation("PipelineSource", fields: [sourceFacilityId], references: [id])
+  destinationFacility   Facility       @relation("PipelineDestination", fields: [destinationFacilityId], references: [id])
+
+  shipments             Shipment[]
+  incidents             PipelineIncident[]
+  adjacencyAsPrimary    PipelineAdjacency[] @relation("PrimarySegment")
+  adjacencyAsAlternate  PipelineAdjacency[] @relation("AlternateSegment")
+  rerouteOptions        RerouteOption[] @relation("RerouteTargetPipeline")
+
+  @@map("pipeline_segments")
+}
+
+/// Adjacency graph for fallback rerouting — links a primary segment to an alternate.
+model PipelineAdjacency {
+  id                  String          @id @default(cuid())
+  primarySegmentId    String          @map("primary_segment_id")
+  alternateSegmentId  String          @map("alternate_segment_id")
+  /// Additional transit delay when using alternate route (days)
+  additionalDelayDays Int             @default(0) @map("additional_delay_days")
+  priority            Int             @default(1) // lower = preferred
+
+  primarySegment      PipelineSegment @relation("PrimarySegment", fields: [primarySegmentId], references: [id], onDelete: Cascade)
+  alternateSegment    PipelineSegment @relation("AlternateSegment", fields: [alternateSegmentId], references: [id], onDelete: Cascade)
+
+  @@unique([primarySegmentId, alternateSegmentId])
+  @@map("pipeline_adjacency")
+}
+
+// ─── Blending Operations ─────────────────────────────────────────────────────
+
+/// Scheduled bitumen diluent blend batch.
+model BlendBatch {
+  id                    String           @id @default(cuid())
+  batchNumber           String           @unique @map("batch_number")
+  facilityId            String           @map("facility_id")
+
+  bitumenVolumeBbls     Decimal          @map("bitumen_volume_bbls") @db.Decimal(18, 2)
+  /// Target diluent ratio (0.20–0.30 typical)
+  targetRatio           Decimal          @map("target_ratio") @db.Decimal(5, 4)
+  /// Computed: (targetRatio × bitumenVolume) / (1 - targetRatio)
+  requiredDiluentBbls   Decimal          @map("required_diluent_bbls") @db.Decimal(18, 2)
+  totalBlendedVolumeBbls Decimal         @map("total_blended_volume_bbls") @db.Decimal(18, 2)
+
+  status                BlendBatchStatus @default(DRAFT)
+  inventoryWarning      Boolean          @default(false) @map("inventory_warning")
+  scheduledAt           DateTime?        @map("scheduled_at")
+  startedAt             DateTime?        @map("started_at")
+  completedAt           DateTime?        @map("completed_at")
+  notes                 String?
+
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+
+  facility              Facility         @relation(fields: [facilityId], references: [id])
+  shipments             Shipment[]
+
+  @@map("blend_batches")
+}
+
+// ─── Shipments & Logistics ───────────────────────────────────────────────────
+
+/// Active or scheduled volume movement on the pipeline network.
+model Shipment {
+  id                    String         @id @default(cuid())
+  shipmentNumber        String         @unique @map("shipment_number")
+  blendBatchId          String?        @map("blend_batch_id")
+  pipelineSegmentId     String         @map("pipeline_segment_id")
+  originFacilityId      String         @map("origin_facility_id")
+  destinationFacilityId String         @map("destination_facility_id")
+
+  volumeBbls            Decimal        @map("volume_bbls") @db.Decimal(18, 2)
+  status                ShipmentStatus @default(SCHEDULED)
+
+  scheduledDepartureAt  DateTime?      @map("scheduled_departure_at")
+  actualDepartureAt     DateTime?      @map("actual_departure_at")
+  estimatedArrivalAt    DateTime?      @map("estimated_arrival_at")
+  actualArrivalAt       DateTime?      @map("actual_arrival_at")
+
+  /// Populated when rerouted or diverted due to incident
+  originalPipelineSegmentId String?    @map("original_pipeline_segment_id")
+  delayDays             Int            @default(0) @map("delay_days")
+
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+
+  blendBatch            BlendBatch?    @relation(fields: [blendBatchId], references: [id])
+  pipelineSegment       PipelineSegment @relation(fields: [pipelineSegmentId], references: [id])
+  originFacility        Facility       @relation("ShipmentOrigin", fields: [originFacilityId], references: [id])
+  destinationFacility   Facility       @relation("ShipmentDestination", fields: [destinationFacilityId], references: [id])
+  rerouteOptions        RerouteOption[]
+
+  @@map("shipments")
+}
+
+// ─── Disruption Simulation ───────────────────────────────────────────────────
+
+/// Simulated or real pipeline disruption event.
+model PipelineIncident {
+  id                    String         @id @default(cuid())
+  incidentNumber        String         @unique @map("incident_number")
+  pipelineSegmentId     String         @map("pipeline_segment_id")
+
+  title                 String
+  description           String?
+  status                IncidentStatus @default(OPEN)
+
+  /// Simulated shutdown duration (days) — default 7 for unplanned outage
+  estimatedDurationDays Int            @default(7) @map("estimated_duration_days")
+  isSimulated           Boolean        @default(true) @map("is_simulated")
+
+  startedAt             DateTime       @default(now()) @map("started_at")
+  resolvedAt            DateTime?      @map("resolved_at")
+
+  /// Volume shortfall across affected shipments (bbl)
+  totalVolumeShortfallBbls Decimal?    @map("total_volume_shortfall_bbls") @db.Decimal(18, 2)
+  /// Aggregate delivery delay (shipment-days)
+  totalDelayShipmentDays   Int?        @map("total_delay_shipment_days")
+
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+
+  pipelineSegment       PipelineSegment @relation(fields: [pipelineSegmentId], references: [id])
+  rerouteOptions        RerouteOption[]
+  notifications         Notification[]
+  webhookEvents         WebhookEvent[]
+
+  @@map("pipeline_incidents")
+}
+
+/// Automated reroute recommendation generated during disruption.
+model RerouteOption {
+  id                    String            @id @default(cuid())
+  incidentId            String            @map("incident_id")
+  shipmentId            String            @map("shipment_id")
+  optionType            RerouteOptionType @map("option_type")
+
+  /// For REROUTE option
+  targetPipelineSegmentId String?         @map("target_pipeline_segment_id")
+  /// For STORAGE_DIVERT option
+  storageFacilityId     String?           @map("storage_facility_id")
+
+  divertedVolumeBbls    Decimal           @map("diverted_volume_bbls") @db.Decimal(18, 2)
+  estimatedDelayDays    Int               @default(0) @map("estimated_delay_days")
+  residualCapacityUsedBbls Decimal?       @map("residual_capacity_used_bbls") @db.Decimal(18, 2)
+  isRecommended         Boolean           @default(false) @map("is_recommended")
+  isAccepted            Boolean           @default(false) @map("is_accepted")
+
+  createdAt             DateTime          @default(now()) @map("created_at")
+
+  incident              PipelineIncident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  shipment              Shipment          @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  targetPipelineSegment PipelineSegment?  @relation("RerouteTargetPipeline", fields: [targetPipelineSegmentId], references: [id])
+  storageFacility       Facility?         @relation("RerouteStorageFacility", fields: [storageFacilityId], references: [id])
+
+  @@map("reroute_options")
+}
+
+// ─── Notifications & Webhooks ────────────────────────────────────────────────
+
+/// In-app notification for the Commercial Scheduler command center.
+model Notification {
+  id          String               @id @default(cuid())
+  incidentId  String?              @map("incident_id")
+  title       String
+  message     String
+  severity    NotificationSeverity @default(INFO)
+  isRead      Boolean              @default(false) @map("is_read")
+  metadata    Json?
+  createdAt   DateTime             @default(now()) @map("created_at")
+
+  incident    PipelineIncident?    @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+
+  @@map("notifications")
+}
+
+/// Outbound webhook payload for the Commercial Trading Desk.
+model WebhookEvent {
+  id              String                @id @default(cuid())
+  incidentId      String?               @map("incident_id")
+  eventType       String                @map("event_type") // PIPELINE_DISRUPTION | INVENTORY_DEPLETION | DELIVERY_DELAY
+  destination     String                @default("COMMERCIAL_TRADING_DESK")
+  payload         Json
+  deliveryStatus  WebhookDeliveryStatus @default(PENDING) @map("delivery_status")
+  deliveredAt     DateTime?             @map("delivered_at")
+  failureReason   String?               @map("failure_reason")
+  createdAt       DateTime              @default(now()) @map("created_at")
+
+  incident        PipelineIncident?     @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+
+  @@map("webhook_events")
+}
+
+/// Immutable audit log for volumetric inventory changes (mass balance trail).
+model InventoryLedger {
+  id              String   @id @default(cuid())
+  facilityId      String   @map("facility_id")
+  transactionType String   @map("transaction_type") // BLEND_CONSUME | PRODUCTION | SHIPMENT_OUT | RECEIPT
+  bitumenDeltaBbls Decimal @map("bitumen_delta_bbls") @db.Decimal(18, 2)
+  diluentDeltaBbls Decimal @map("diluent_delta_bbls") @db.Decimal(18, 2)
+  referenceType   String?  @map("reference_type") // BlendBatch | Shipment | Manual
+  referenceId     String?  @map("reference_id")
+  balanceBitumenAfter Decimal @map("balance_bitumen_after") @db.Decimal(18, 2)
+  balanceDiluentAfter Decimal @map("balance_diluent_after") @db.Decimal(18, 2)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([facilityId, createdAt])
+  @@map("inventory_ledger")
+}

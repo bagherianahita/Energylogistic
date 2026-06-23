@@ -1,0 +1,16 @@
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+:root {
+  --color-optimal: #22c55e;
+  --color-restricted: #f97316;
+  --color-disrupted: #ef4444;
+  --color-surface: #0f1419;
+  --color-panel: #1a2332;
+  --color-border: #2d3a4f;
+}
+
+body {
+  @apply bg-[var(--color-surface)] text-slate-100 antialiased;
+}

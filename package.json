@@ -1,0 +1,27 @@
+{
+  "name": "energy-logix",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Multi-Asset Diluent Blender & Pipeline Disruption Simulator",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "db:generate": "npm run generate --workspace=@energy-logix/database",
+    "db:migrate": "npm run migrate --workspace=@energy-logix/database",
+    "db:seed": "npm run seed --workspace=@energy-logix/database",
+    "db:reset": "npm run reset --workspace=@energy-logix/database",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
