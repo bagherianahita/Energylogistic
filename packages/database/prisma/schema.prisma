@@ -30,6 +30,7 @@ enum PipelineStatus {
 
 enum BlendBatchStatus {
   DRAFT
+  PENDING_APPROVAL
   SCHEDULED
   IN_PROGRESS
   COMPLETED
@@ -68,6 +69,43 @@ enum NotificationSeverity {
 enum WebhookDeliveryStatus {
   PENDING
   DELIVERED
+  FAILED
+}
+
+enum ApprovalEntityType {
+  BLEND_BATCH
+  INCIDENT_REROUTE
+  INVENTORY_TRANSFER
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ApproverRole {
+  COMMERCIAL_SCHEDULER
+  TRADING_DESK
+  OPERATIONS_MANAGER
+  ADMIN
+}
+
+enum ScadaQuality {
+  GOOD
+  UNCERTAIN
+  BAD
+}
+
+enum ErpSyncDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum ErpSyncStatus {
+  PENDING
+  SUCCESS
   FAILED
 }
 
@@ -203,6 +241,7 @@ model BlendBatch {
 
   facility              Facility         @relation(fields: [facilityId], references: [id])
   shipments             Shipment[]
+  approvalRequests      ApprovalRequest[]
 
   @@map("blend_batches")
 }
@@ -355,4 +394,92 @@ model InventoryLedger {
 
   @@index([facilityId, createdAt])
   @@map("inventory_ledger")
+}
+
+// ─── SCADA Telemetry ─────────────────────────────────────────────────────────
+
+/// Registered SCADA tag (pipeline flow, tank level, pressure, temperature).
+model ScadaTag {
+  id              String   @id @default(cuid())
+  tagCode         String   @unique @map("tag_code")
+  tagName         String   @map("tag_name")
+  unit            String   // bbl/d | bbl | psi | degC | pct
+  assetType       String   @map("asset_type") // PIPELINE | FACILITY | TANK
+  assetCode       String   @map("asset_code")
+  minValue        Decimal? @map("min_value") @db.Decimal(18, 4)
+  maxValue        Decimal? @map("max_value") @db.Decimal(18, 4)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  readings        ScadaTelemetryReading[]
+
+  @@index([assetCode])
+  @@map("scada_tags")
+}
+
+/// Time-series SCADA reading ingested from field systems or simulator.
+model ScadaTelemetryReading {
+  id              String       @id @default(cuid())
+  tagId           String       @map("tag_id")
+  value           Decimal      @db.Decimal(18, 4)
+  quality         ScadaQuality @default(GOOD)
+  source          String       @default("SCADA_SIMULATOR") // SCADA_SIMULATOR | OPC_UA | MANUAL_INGEST
+  recordedAt      DateTime     @map("recorded_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  tag             ScadaTag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@index([tagId, recordedAt(sort: Desc)])
+  @@map("scada_telemetry_readings")
+}
+
+// ─── Approval Workflows ──────────────────────────────────────────────────────
+
+/// Multi-role approval gate before operational actions execute.
+model ApprovalRequest {
+  id              String             @id @default(cuid())
+  requestNumber   String             @unique @map("request_number")
+  entityType      ApprovalEntityType @map("entity_type")
+  entityId        String             @map("entity_id")
+  blendBatchId    String?            @map("blend_batch_id")
+
+  title           String
+  description     String?
+  status          ApprovalStatus     @default(PENDING)
+  requiredRole    ApproverRole       @map("required_role")
+  requestedBy     String             @map("requested_by")
+  reviewedBy      String?            @map("reviewed_by")
+  reviewNotes     String?            @map("review_notes")
+  payload         Json?
+
+  requestedAt     DateTime           @default(now()) @map("requested_at")
+  reviewedAt      DateTime?          @map("reviewed_at")
+  createdAt       DateTime           @default(now()) @map("created_at")
+
+  blendBatch      BlendBatch?        @relation(fields: [blendBatchId], references: [id], onDelete: SetNull)
+
+  @@index([status, requiredRole])
+  @@index([entityType, entityId])
+  @@map("approval_requests")
+}
+
+// ─── ERP Connectivity ────────────────────────────────────────────────────────
+
+/// Audit log for ERP / Trading Desk inbound and outbound sync.
+model ErpSyncRecord {
+  id              String           @id @default(cuid())
+  direction       ErpSyncDirection
+  syncType        String           @map("sync_type") // INVENTORY_SNAPSHOT | BLEND_ORDER | DISRUPTION_ALERT | WEBHOOK_DELIVERY
+  destination     String           @default("SAP_ERP")
+  status          ErpSyncStatus    @default(PENDING)
+  payload         Json
+  responseCode    Int?             @map("response_code")
+  responseBody    String?          @map("response_body")
+  webhookEventId  String?          @map("webhook_event_id")
+  errorMessage    String?          @map("error_message")
+  attemptedAt     DateTime         @default(now()) @map("attempted_at")
+  completedAt     DateTime?        @map("completed_at")
+
+  @@index([status, syncType])
+  @@map("erp_sync_records")
 }

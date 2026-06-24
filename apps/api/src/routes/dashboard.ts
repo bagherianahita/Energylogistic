@@ -6,7 +6,7 @@ export const dashboardRouter = Router();
 
 dashboardRouter.get("/summary", async (_req, res, next) => {
   try {
-    const [facilities, pipelines, activeShipments, openIncidents, unreadNotifications, inventoryWarnings] =
+    const [facilities, pipelines, activeShipments, openIncidents, unreadNotifications, inventoryWarnings, pendingApprovals, scadaTagCount] =
       await Promise.all([
         prisma.facility.findMany({
           where: {
@@ -27,6 +27,8 @@ dashboardRouter.get("/summary", async (_req, res, next) => {
         prisma.pipelineIncident.count({ where: { status: "OPEN" } }),
         prisma.notification.count({ where: { isRead: false } }),
         prisma.blendBatch.count({ where: { inventoryWarning: true } }),
+        prisma.approvalRequest.count({ where: { status: "PENDING" } }),
+        prisma.scadaTag.count({ where: { isActive: true } }),
       ]);
 
     const inventoryMeters = facilities.map((f) => {
@@ -69,6 +71,8 @@ dashboardRouter.get("/summary", async (_req, res, next) => {
         openIncidents,
         unreadNotifications,
         inventoryWarnings,
+        pendingApprovals,
+        scadaTagCount,
       },
     });
   } catch (err) {

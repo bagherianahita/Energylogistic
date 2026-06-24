@@ -34,11 +34,17 @@ export function BlendScheduler({ onSuccess }: { onSuccess: () => void }) {
         bitumenVolumeBbls: bitumenVolume,
         targetRatio,
       });
-      const batch = res as { batch: { batchNumber: string }; validation: { inventoryDepletionWarning: boolean } };
+      const batch = res as {
+        batch: { batchNumber: string };
+        approvalRequired?: boolean;
+        validation: { inventoryDepletionWarning: boolean };
+      };
       setResult(
-        batch.validation.inventoryDepletionWarning
-          ? `Batch ${batch.batch.batchNumber} — INVENTORY DEPLETION WARNING`
-          : `Batch ${batch.batch.batchNumber} scheduled`
+        batch.approvalRequired
+          ? `Batch ${batch.batch.batchNumber} submitted — awaiting approval`
+          : batch.validation.inventoryDepletionWarning
+            ? `Batch ${batch.batch.batchNumber} — INVENTORY DEPLETION WARNING`
+            : `Batch ${batch.batch.batchNumber} scheduled`
       );
       onSuccess();
     } catch (err) {

@@ -419,6 +419,25 @@ async function main() {
     ],
   });
 
+  // ─── SCADA Tags (live telemetry registry) ─────────────────────────────────
+
+  const scadaTags = [
+    { tagCode: "PL-FC-LH.FLOW", tagName: "Foster Creek → Lloyd Hub Flow", unit: "bbl/d", assetType: "PIPELINE", assetCode: "PL-FC-LH", maxValue: 120000 },
+    { tagCode: "PL-CL-LH.FLOW", tagName: "Christina Lake → Lloyd Hub Flow", unit: "bbl/d", assetType: "PIPELINE", assetCode: "PL-CL-LH", maxValue: 95000 },
+    { tagCode: "PL-SR-LH.FLOW", tagName: "Sunrise → Lloyd Hub Flow", unit: "bbl/d", assetType: "PIPELINE", assetCode: "PL-SR-LH", maxValue: 80000 },
+    { tagCode: "PL-LH-UP.FLOW", tagName: "Lloyd Hub → Upgrader Flow", unit: "bbl/d", assetType: "PIPELINE", assetCode: "PL-LH-UP", maxValue: 150000 },
+    { tagCode: "FOSTER_CREEK.INV", tagName: "Foster Creek Total Inventory", unit: "bbl", assetType: "FACILITY", assetCode: "FOSTER_CREEK" },
+    { tagCode: "SUNRISE.DILUENT", tagName: "Sunrise Diluent Inventory", unit: "bbl", assetType: "FACILITY", assetCode: "SUNRISE", minValue: 10000 },
+  ];
+
+  for (const tag of scadaTags) {
+    await prisma.scadaTag.upsert({
+      where: { tagCode: tag.tagCode },
+      create: tag,
+      update: { tagName: tag.tagName, unit: tag.unit, isActive: true },
+    });
+  }
+
   // ─── Inventory Ledger (opening balances) ──────────────────────────────────
 
   const facilities = [fosterCreek, christinaLake, sunrise, lloydHub, lloydUpgrader];
@@ -440,7 +459,7 @@ async function main() {
   console.log(`  Facilities: ${facilities.length + 2}`);
   console.log(`  Pipeline segments: ${pipelines.length}`);
   console.log(`  Blend batches: 2`);
-  console.log(`  Active shipments: 4`);
+  console.log(`  SCADA tags: ${scadaTags.length}`);
 }
 
 main()

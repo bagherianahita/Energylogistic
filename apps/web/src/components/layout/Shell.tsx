@@ -8,15 +8,17 @@ import {
   AlertTriangle,
   Activity,
   Settings,
+  Radio,
 } from "lucide-react";
 
-export type NavSection = "overview" | "network" | "blending" | "incidents";
+export type NavSection = "overview" | "network" | "blending" | "incidents" | "integrations";
 
 const NAV: { id: NavSection; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Operations Overview", icon: LayoutDashboard },
   { id: "network", label: "Pipeline Network", icon: GitBranch },
   { id: "blending", label: "Diluent Blending", icon: Droplets },
   { id: "incidents", label: "Disruption Control", icon: AlertTriangle },
+  { id: "integrations", label: "SCADA & ERP", icon: Radio },
 ];
 
 export function Sidebar({

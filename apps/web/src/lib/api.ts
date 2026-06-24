@@ -8,6 +8,8 @@ export type DashboardSummary = {
     openIncidents: number;
     unreadNotifications: number;
     inventoryWarnings: number;
+    pendingApprovals: number;
+    scadaTagCount: number;
   };
 };
 
@@ -60,6 +62,52 @@ export type Topology = {
   adjacency: { primary: string; alternate: string; additionalDelayDays: number; priority: number }[];
 };
 
+export type ScadaLiveData = {
+  source: string;
+  tagCount: number;
+  lastCycleAt: string | null;
+  tags: {
+    tagCode: string;
+    tagName: string;
+    unit: string;
+    assetType: string;
+    assetCode: string;
+    latest: { value: number; quality: string; source: string; recordedAt: string } | null;
+    sparkline: number[];
+  }[];
+};
+
+export type ApprovalRequest = {
+  id: string;
+  requestNumber: string;
+  entityType: string;
+  title: string;
+  description: string | null;
+  status: string;
+  requiredRole: string;
+  requestedBy: string;
+  requestedAt: string;
+  blendBatch?: { batchNumber: string; facility?: { code: string; name: string } };
+};
+
+export type ErpSyncStatus = {
+  tradingDeskUrl: boolean;
+  erpUrl: boolean;
+  pendingWebhooks: number;
+  pendingSyncs: number;
+  recent: {
+    id: string;
+    direction: string;
+    syncType: string;
+    destination: string;
+    status: string;
+    responseCode: number | null;
+    errorMessage: string | null;
+    attemptedAt: string;
+    completedAt: string | null;
+  }[];
+};
+
 export const api = {
   getDashboard: () => apiFetch<DashboardSummary>("/api/dashboard/summary"),
   getTopology: () => apiFetch<Topology>("/api/pipelines/topology"),
@@ -74,6 +122,22 @@ export const api = {
   resolveIncident: (incidentNumber: string) =>
     apiFetch(`/api/incidents/${incidentNumber}/resolve`, { method: "PATCH" }),
   getIncidents: () => apiFetch<unknown[]>("/api/incidents"),
+  getScadaLive: () => apiFetch<ScadaLiveData>("/api/scada/live"),
+  getScadaStatus: () => apiFetch<{ activeTags: number; lastReadingAt: string | null }>("/api/scada/status"),
+  getApprovals: (status = "PENDING") => apiFetch<ApprovalRequest[]>(`/api/approvals?status=${status}`),
+  approveRequest: (requestNumber: string, reviewedBy: string, reviewNotes?: string) =>
+    apiFetch(`/api/approvals/${requestNumber}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ reviewedBy, reviewNotes }),
+    }),
+  rejectRequest: (requestNumber: string, reviewedBy: string, reviewNotes?: string) =>
+    apiFetch(`/api/approvals/${requestNumber}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reviewedBy, reviewNotes }),
+    }),
+  getErpStatus: () => apiFetch<ErpSyncStatus>("/api/erp/sync/status"),
+  syncInventoryToErp: () => apiFetch<{ facilities: number; syncId: string }>("/api/erp/sync/inventory", { method: "POST" }),
+  deliverPendingWebhooks: () => apiFetch<{ processed: number }>("/api/erp/deliver-pending", { method: "POST" }),
 };
 
 export function formatBbls(n: number): string {

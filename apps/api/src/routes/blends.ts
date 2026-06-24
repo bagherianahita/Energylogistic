@@ -1,6 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
-import { prisma, BlendBatchStatus, NotificationSeverity } from "@energy-logix/database";
+import {
+  prisma,
+  BlendBatchStatus,
+  NotificationSeverity,
+  ApprovalEntityType,
+  ApprovalStatus,
+  ApproverRole,
+} from "@energy-logix/database";
 import { calculateRequiredDiluent, isInventoryDepleted } from "@energy-logix/database";
 import { AppError } from "../middleware/error-handler.js";
 
@@ -52,22 +59,58 @@ blendsRouter.post("/schedule", async (req, res, next) => {
     }
 
     const batchNumber = `BLEND-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
-    const status = depleted ? BlendBatchStatus.INVENTORY_WARNING : BlendBatchStatus.SCHEDULED;
+    const status = BlendBatchStatus.PENDING_APPROVAL;
 
-    const batch = await prisma.blendBatch.create({
-      data: {
-        batchNumber,
-        facilityId: facility.id,
-        bitumenVolumeBbls: input.bitumenVolumeBbls,
-        targetRatio: input.targetRatio,
-        requiredDiluentBbls: requiredDiluent,
-        totalBlendedVolumeBbls: input.bitumenVolumeBbls + requiredDiluent,
-        status,
-        inventoryWarning: depleted,
-        scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : new Date(),
-        notes: input.notes,
-      },
-      include: { facility: { select: { code: true, name: true } } },
+    const batch = await prisma.$transaction(async (tx) => {
+      const created = await tx.blendBatch.create({
+        data: {
+          batchNumber,
+          facilityId: facility.id,
+          bitumenVolumeBbls: input.bitumenVolumeBbls,
+          targetRatio: input.targetRatio,
+          requiredDiluentBbls: requiredDiluent,
+          totalBlendedVolumeBbls: input.bitumenVolumeBbls + requiredDiluent,
+          status,
+          inventoryWarning: depleted,
+          scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : new Date(),
+          notes: input.notes,
+        },
+        include: { facility: { select: { code: true, name: true } } },
+      });
+
+      const requestNumber = `APR-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
+      await tx.approvalRequest.create({
+        data: {
+          requestNumber,
+          entityType: ApprovalEntityType.BLEND_BATCH,
+          entityId: created.id,
+          blendBatchId: created.id,
+          title: `Approve blend batch ${batchNumber}`,
+          description: `${facility.name}: ${input.bitumenVolumeBbls.toLocaleString()} bbl bitumen @ ${(input.targetRatio * 100).toFixed(1)}% diluent ratio`,
+          status: ApprovalStatus.PENDING,
+          requiredRole: depleted ? ApproverRole.TRADING_DESK : ApproverRole.COMMERCIAL_SCHEDULER,
+          requestedBy: "Commercial Scheduler",
+          payload: {
+            batchNumber,
+            facilityCode: facility.code,
+            bitumenVolumeBbls: input.bitumenVolumeBbls,
+            targetRatio: input.targetRatio,
+            requiredDiluentBbls: requiredDiluent,
+            inventoryDepletionWarning: depleted,
+          },
+        },
+      });
+
+      await tx.notification.create({
+        data: {
+          title: "Blend Approval Required",
+          message: `Batch ${batchNumber} at ${facility.name} awaits ${depleted ? "Trading Desk" : "Commercial Scheduler"} approval.`,
+          severity: depleted ? NotificationSeverity.HIGH_PRIORITY : NotificationSeverity.WARNING,
+          metadata: { batchNumber, requestNumber, facilityCode: facility.code },
+        },
+      });
+
+      return created;
     });
 
     if (depleted) {
@@ -88,6 +131,7 @@ blendsRouter.post("/schedule", async (req, res, next) => {
 
     res.status(201).json({
       batch,
+      approvalRequired: true,
       validation: {
         requiredDiluentBbls: requiredDiluent,
         formula: "Required Diluent = (Target Ratio × Bitumen Volume) / (1 - Target Ratio)",

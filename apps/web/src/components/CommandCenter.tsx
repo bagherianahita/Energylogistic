@@ -8,7 +8,9 @@ import { InventoryMeters } from "./InventoryMeters";
 import { PipelineMatrix } from "./PipelineMatrix";
 import { BlendScheduler } from "./BlendScheduler";
 import { IncidentSimulator } from "./IncidentSimulator";
-import { NotificationsPanel } from "./NotificationsPanel";
+import { ApprovalsPanel } from "./ApprovalsPanel";
+import { ScadaLivePanel } from "./ScadaLivePanel";
+import { ErpConnectivityPanel } from "./ErpConnectivityPanel";
 import { NetworkTopologyGraph } from "./NetworkTopology";
 import {
   PipelineUtilizationChart,
@@ -24,6 +26,8 @@ import {
   Droplet,
   TrendingUp,
   RefreshCw,
+  ClipboardCheck,
+  Radio,
 } from "lucide-react";
 
 export function CommandCenter() {
@@ -123,7 +127,7 @@ export function CommandCenter() {
           <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-5 space-y-5 animate-slide-up">
             {/* Mobile nav */}
             <div className="lg:hidden flex gap-1 overflow-x-auto pb-1">
-              {(["overview", "network", "blending", "incidents"] as NavSection[]).map((s) => (
+              {(["overview", "network", "blending", "incidents", "integrations"] as NavSection[]).map((s) => (
                 <button
                   key={s}
                   type="button"
@@ -146,6 +150,7 @@ export function CommandCenter() {
                   {section === "network" && "Pipeline Network"}
                   {section === "blending" && "Diluent Blending"}
                   {section === "incidents" && "Disruption Control"}
+                  {section === "integrations" && "SCADA & ERP Integrations"}
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Lloydminster Thermal · Athabasca & Peace River assets
@@ -163,7 +168,7 @@ export function CommandCenter() {
             </div>
 
             {/* KPI row — always visible */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
               <KpiTile
                 label="Network Throughput"
                 value={(totalThroughput / 1000).toFixed(0) + "k"}
@@ -197,6 +202,19 @@ export function CommandCenter() {
                 status={kpis.unreadNotifications > 0 ? "restricted" : "neutral"}
                 icon={<Bell className="w-4 h-4" />}
               />
+              <KpiTile
+                label="Pending Approvals"
+                value={kpis.pendingApprovals}
+                status={kpis.pendingApprovals > 0 ? "restricted" : "optimal"}
+                icon={<ClipboardCheck className="w-4 h-4" />}
+              />
+              <KpiTile
+                label="SCADA Tags"
+                value={kpis.scadaTagCount}
+                unit="live"
+                status="optimal"
+                icon={<Radio className="w-4 h-4" />}
+              />
             </div>
 
             {section === "overview" && (
@@ -214,8 +232,12 @@ export function CommandCenter() {
                   <div className="lg:col-span-2">
                     <NotificationsPanel items={notifications} />
                   </div>
-                  <BlendScheduler onSuccess={refresh} />
+                  <div className="space-y-4">
+                    <BlendScheduler onSuccess={refresh} />
+                    <ApprovalsPanel onSuccess={refresh} />
+                  </div>
                 </div>
+                <ScadaLivePanel />
               </>
             )}
 
@@ -233,9 +255,20 @@ export function CommandCenter() {
             {section === "blending" && (
               <div className="grid lg:grid-cols-2 gap-4">
                 <BlendScheduler onSuccess={refresh} />
+                <ApprovalsPanel onSuccess={refresh} />
                 <InventoryCompositionChart meters={inventoryMeters} />
                 <div className="lg:col-span-2">
                   <InventoryMeters meters={inventoryMeters} />
+                </div>
+              </div>
+            )}
+
+            {section === "integrations" && (
+              <div className="grid lg:grid-cols-2 gap-4">
+                <ScadaLivePanel />
+                <ErpConnectivityPanel />
+                <div className="lg:col-span-2">
+                  <ApprovalsPanel onSuccess={refresh} />
                 </div>
               </div>
             )}
@@ -255,7 +288,7 @@ export function CommandCenter() {
         <footer className="h-8 border-t border-slate-800/80 bg-surface-elevated/60 flex items-center px-5 text-[10px] text-slate-600 font-mono shrink-0">
           <span>energy-Logix MES v1.0</span>
           <span className="mx-3 text-slate-800">|</span>
-          <span>PostgreSQL · Mass Balance Enforced</span>
+          <span>PostgreSQL · Mass Balance · SCADA · ERP</span>
           <span className="mx-3 text-slate-800">|</span>
           <span className="text-cyan-600/60">LIVE DATA</span>
         </footer>

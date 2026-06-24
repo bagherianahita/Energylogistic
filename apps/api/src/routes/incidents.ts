@@ -8,8 +8,12 @@ import {
   RerouteOptionType,
   NotificationSeverity,
   WebhookDeliveryStatus,
+  ApprovalEntityType,
+  ApprovalStatus,
+  ApproverRole,
 } from "@energy-logix/database";
 import { calculateResidualCapacity } from "@energy-logix/database";
+import { deliverWebhookEvent } from "../services/erp-delivery.js";
 import { AppError } from "../middleware/error-handler.js";
 
 export const incidentsRouter = Router();
@@ -196,6 +200,23 @@ incidentsRouter.post("/simulate", async (req, res, next) => {
         },
       });
 
+      if (rerouteOptions.some((o) => o.isRecommended)) {
+        const requestNumber = `APR-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
+        await tx.approvalRequest.create({
+          data: {
+            requestNumber,
+            entityType: ApprovalEntityType.INCIDENT_REROUTE,
+            entityId: incident.id,
+            title: `Approve reroute for ${incidentNumber}`,
+            description: `${rerouteOptions.length} reroute option(s) generated for ${segment.name} disruption.`,
+            status: ApprovalStatus.PENDING,
+            requiredRole: ApproverRole.OPERATIONS_MANAGER,
+            requestedBy: "Disruption Simulator",
+            payload: webhookPayload,
+          },
+        });
+      }
+
       await tx.notification.create({
         data: {
           incidentId: incident.id,
@@ -208,6 +229,20 @@ incidentsRouter.post("/simulate", async (req, res, next) => {
 
       return { incident: updatedIncident, rerouteOptions, activeShipments, webhookPayload };
     });
+
+    const webhook = await prisma.webhookEvent.findFirst({
+      where: { incidentId: result.incident.id },
+      orderBy: { createdAt: "desc" },
+    });
+    if (webhook) {
+      await deliverWebhookEvent(webhook.id).catch(() => undefined);
+      const updated = await prisma.webhookEvent.findUnique({ where: { id: webhook.id } });
+      res.status(201).json({
+        ...result,
+        webhookDeliveryStatus: updated?.deliveryStatus ?? "PENDING",
+      });
+      return;
+    }
 
     res.status(201).json(result);
   } catch (err) {
