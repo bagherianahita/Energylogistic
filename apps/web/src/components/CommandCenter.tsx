@@ -16,7 +16,7 @@ import {
   ThroughputTrendChart,
   StorageDistributionChart,
   CapacityVsFlowChart,
-} from "./charts/AnalyticsCharts";
+} from "./charts/ChartsLazy";
 import {
   Truck,
   AlertOctagon,
