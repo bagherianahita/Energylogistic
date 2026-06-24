@@ -50,8 +50,11 @@ npm run setup
 npm run dev
 ```
 
-- **Web UI:** http://localhost:3000  
-- **API:** http://localhost:4000/health  
+| | URL |
+|---|-----|
+| **Web UI** | http://localhost:3000 |
+| **API** | http://localhost:4000 |
+| **Health check** | http://localhost:4000/health |
 
 `npm run setup` starts Postgres, waits for readiness, migrates, and seeds demo data (cross-platform).
 
