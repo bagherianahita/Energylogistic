@@ -99,6 +99,16 @@ Required Diluent (bbl) = (Target Ratio × Bitumen Volume) / (1 - Target Ratio)
 
 Target ratios typically range from 20% to 30%. If diluent inventory is insufficient, an **Inventory Depletion Warning** is raised.
 
+## Roadmap
+
+| Priority | Enhancement |
+|----------|-------------|
+| Configurable rule engine | Tunable blend, inventory, and disruption reroute policies |
+| RBAC | Commercial Scheduler · Trading Desk · Admin |
+| Enterprise integration | SCADA telemetry, ERP, approval workflows |
+
+Details: [docs/ROADMAP.md](docs/ROADMAP.md)
+
 ## License
 
 Portfolio / demonstration project.
