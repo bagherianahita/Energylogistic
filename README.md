@@ -1,4 +1,6 @@
 # energy-Logix
+<img width="1916" height="961" alt="image" src="https://github.com/user-attachments/assets/11526173-8d63-473d-8ff1-493ac74a3bd7" />
+
 
 **Multi-Asset Diluent Blender & Pipeline Disruption Simulator**
 
@@ -106,6 +108,9 @@ Target ratios typically range from 20% to 30%. If diluent inventory is insuffici
 | Configurable rule engine | Tunable blend, inventory, and disruption reroute policies |
 | RBAC | Commercial Scheduler · Trading Desk · Admin |
 | Enterprise integration | SCADA telemetry, ERP, approval workflows |
+
+<img width="1289" height="950" alt="image" src="https://github.com/user-attachments/assets/4f0f5f32-1fd4-4fc6-bbea-34c13c0b0f4b" />
+
 
 Details: [docs/ROADMAP.md](docs/ROADMAP.md)
 
