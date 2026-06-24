@@ -41,9 +41,21 @@ energy-logix/
 └── package.json                # Workspace root
 ```
 
-## Quick Start
+## Quick start (employers — Docker required)
 
-### 1. Prerequisites
+```bash
+cp .env.example .env
+npm install
+npm run setup
+npm run dev
+```
+
+- **Web UI:** http://localhost:3000  
+- **API:** http://localhost:4000/health  
+
+`npm run setup` starts Postgres, waits for readiness, migrates, and seeds demo data (cross-platform).
+
+## Detailed setup (alternative)
 - Node.js 20+
 - Docker Desktop (for PostgreSQL)
 
