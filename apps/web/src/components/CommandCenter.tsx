@@ -11,7 +11,9 @@ import { IncidentSimulator } from "./IncidentSimulator";
 import { ApprovalsPanel } from "./ApprovalsPanel";
 import { ScadaLivePanel } from "./ScadaLivePanel";
 import { ErpConnectivityPanel } from "./ErpConnectivityPanel";
+import { NotificationsPanel } from "./NotificationsPanel";
 import { NetworkTopologyGraph } from "./NetworkTopology";
+import { DEMO_DASHBOARD, DEMO_NOTIFICATIONS, DEMO_TOPOLOGY } from "@/lib/demoData";
 import {
   PipelineUtilizationChart,
   InventoryCompositionChart,
@@ -36,6 +38,7 @@ export function CommandCenter() {
   const [topology, setTopology] = useState<Topology | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -53,8 +56,18 @@ export function CommandCenter() {
       setTopology(topo);
       setLastUpdated(new Date());
       setError(null);
+      setDemoMode(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Cannot reach API on port 4000");
+      setData(DEMO_DASHBOARD);
+      setNotifications(DEMO_NOTIFICATIONS);
+      setTopology(DEMO_TOPOLOGY);
+      setLastUpdated(new Date());
+      setDemoMode(true);
+      setError(
+        err instanceof Error
+          ? `${err.message} — showing offline demo data`
+          : "API offline — showing offline demo data"
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -89,20 +102,13 @@ export function CommandCenter() {
     );
   }
 
-  if (error || !data) {
+  if (!data) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-5 p-8 text-center">
         <AlertOctagon className="w-12 h-12 text-red-400/80" />
         <div>
           <h1 className="text-lg font-semibold text-slate-200">Platform Connection Error</h1>
           <p className="text-slate-500 text-sm mt-1 max-w-md">{error}</p>
-        </div>
-        <div className="text-left text-xs font-mono text-slate-500 bg-panel border border-slate-800 rounded-xl p-5 space-y-1.5 max-w-md">
-          <p className="text-slate-400 font-sans font-medium mb-2">Start the demo:</p>
-          <p>npm run docker:up</p>
-          <p>npm run db:migrate:deploy</p>
-          <p>npm run db:seed</p>
-          <p>npm run dev</p>
         </div>
         <button
           onClick={refresh}
@@ -122,6 +128,18 @@ export function CommandCenter() {
 
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar lastUpdated={lastUpdated} systemStatus={systemStatus} />
+
+        {demoMode ? (
+          <div className="bg-amber-500/10 border-b border-amber-500/30 px-5 py-2 text-xs text-amber-200 flex flex-wrap items-center justify-between gap-2">
+            <span>
+              <strong>Offline demo mode</strong> — API on port 4000 unavailable. UI uses seeded data;
+              run <code className="font-mono">npm run setup && npm run dev</code> for live data.
+            </span>
+            <button type="button" onClick={refresh} className="text-amber-100 underline">
+              Retry API
+            </button>
+          </div>
+        ) : null}
 
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-5 space-y-5 animate-slide-up">
@@ -290,7 +308,9 @@ export function CommandCenter() {
           <span className="mx-3 text-slate-800">|</span>
           <span>PostgreSQL · Mass Balance · SCADA · ERP</span>
           <span className="mx-3 text-slate-800">|</span>
-          <span className="text-cyan-600/60">LIVE DATA</span>
+          <span className={demoMode ? "text-amber-500/80" : "text-cyan-600/60"}>
+            {demoMode ? "DEMO DATA" : "LIVE DATA"}
+          </span>
         </footer>
       </div>
     </div>
