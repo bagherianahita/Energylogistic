@@ -1,4 +1,4 @@
-# energy-Logix
+﻿# energy-Logix
 <img width="1916" height="961" alt="image" src="https://github.com/user-attachments/assets/11526173-8d63-473d-8ff1-493ac74a3bd7" />
 
 
@@ -41,7 +41,7 @@ energy-logix/
 └── package.json                # Workspace root
 ```
 
-## Quick start (employers — Docker required)
+## Quick start
 
 ```bash
 cp .env.example .env
